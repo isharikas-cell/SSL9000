@@ -20,7 +20,9 @@ public:
         const float sideGain = juce::jlimit(0.0f, 2.0f, width);
         const float cross = juce::jlimit(0.0f, 0.08f, crosstalk);
         constexpr float threshold = 0.0630957f; // -24 dBFS
-        constexpr float kneeRange = 0.50f;
+        // A narrower knee makes saturation clearly engage on material around -20 dBFS.
+        // At -20 dBFS (linear peak 0.1), activity is approximately 0.31.
+        constexpr float kneeRange = 0.12f;
         for (int i = 0; i < buffer.getNumSamples(); ++i) {
             const float inL = left[i], inR = right[i];
             const float detector = juce::jmax(std::abs(inL), std::abs(inR));
