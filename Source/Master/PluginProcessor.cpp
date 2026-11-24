@@ -15,12 +15,12 @@ public:
         return p;
     }
     const juce::String getName() const override { return "SSL9000 Master"; }
-    void prepareToPlay(double, int) override {}
+    void prepareToPlay(double sampleRate, int) override { saturation.prepare(sampleRate); }
     void releaseResources() override {}
     bool isBusesLayoutSupported(const BusesLayout& l) const override { return l.getMainInputChannelSet() == juce::AudioChannelSet::stereo() && l.getMainOutputChannelSet() == juce::AudioChannelSet::stereo(); }
     void processBlock(juce::AudioBuffer<float>& b, juce::MidiBuffer&) override {
         juce::ScopedNoDenormals noDenormals;
-        ssl9000::process(b, state.getRawParameterValue("drive")->load(), state.getRawParameterValue("width")->load(), state.getRawParameterValue("cross")->load());
+        saturation.process(b, state.getRawParameterValue("drive")->load(), state.getRawParameterValue("width")->load(), state.getRawParameterValue("cross")->load());
     }
     juce::AudioProcessorEditor* createEditor() override { return new juce::GenericAudioProcessorEditor(*this); }
     bool hasEditor() const override { return true; }
@@ -35,6 +35,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
+    ssl9000::DynamicSaturation saturation;
     juce::AudioProcessorValueTreeState state;
 };
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new SSL9000MasterProcessor(); }
