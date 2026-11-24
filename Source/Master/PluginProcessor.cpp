@@ -20,7 +20,7 @@ public:
     bool isBusesLayoutSupported(const BusesLayout& l) const override { return l.getMainInputChannelSet() == juce::AudioChannelSet::stereo() && l.getMainOutputChannelSet() == juce::AudioChannelSet::stereo(); }
     void processBlock(juce::AudioBuffer<float>& b, juce::MidiBuffer&) override {
         juce::ScopedNoDenormals noDenormals;
-        saturation.process(b, state.getRawParameterValue("drive")->load(), state.getRawParameterValue("width")->load(), state.getRawParameterValue("cross")->load());
+        saturation.process(b, state.getRawParameterValue("drive")->load(), state.getRawParameterValue("width")->load(), state.getRawParameterValue("cross")->load(), -30.0f);
     }
     juce::AudioProcessorEditor* createEditor() override { return new juce::GenericAudioProcessorEditor(*this); }
     bool hasEditor() const override { return true; }
