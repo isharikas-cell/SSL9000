@@ -3,27 +3,44 @@
 #include <cmath>
 
 namespace ssl9000 {
-inline void process(juce::AudioBuffer<float>& buffer, float driveDb, float width, float crosstalk) noexcept {
-    if (buffer.getNumChannels() < 2) return;
-    const int samples = buffer.getNumSamples();
-    const float amount = juce::jlimit(0.0f, 18.0f, driveDb) / 18.0f;
-    const float drive = 1.0f + amount * 7.0f;
-    const float normaliser = std::tanh(drive);
-    const float cross = juce::jlimit(0.0f, 0.08f, crosstalk);
-    const float sideGain = juce::jlimit(0.0f, 2.0f, width);
-    auto* left = buffer.getWritePointer(0);
-    auto* right = buffer.getWritePointer(1);
-    for (int i = 0; i < samples; ++i) {
-        const float mid = 0.5f * (left[i] + right[i]);
-        const float side = 0.5f * (left[i] - right[i]) * sideGain;
-        const float dryL = mid + side;
-        const float dryR = mid - side;
-        const float wetL = std::tanh(dryL * drive) / normaliser;
-        const float wetR = std::tanh(dryR * drive) / normaliser;
-        const float l = dryL + amount * (wetL - dryL);
-        const float r = dryR + amount * (wetR - dryR);
-        left[i] = l * (1.0f - cross) + r * cross;
-        right[i] = r * (1.0f - cross) + l * cross;
+class DynamicSaturation {
+public:
+    void prepare(double sampleRate) noexcept {
+        const float sr = static_cast<float>(sampleRate > 1.0 ? sampleRate : 44100.0);
+        attackCoeff = std::exp(-1.0f / (0.008f * sr));
+        releaseCoeff = std::exp(-1.0f / (0.120f * sr));
+        envelope = 0.0f;
     }
-}
-}
+    void process(juce::AudioBuffer<float>& buffer, float drive, float width, float crosstalk) noexcept {
+        if (buffer.getNumChannels() < 2) return;
+        auto* left = buffer.getWritePointer(0);
+        auto* right = buffer.getWritePointer(1);
+        const float driveAmount = juce::jlimit(0.0f, 1.0f, drive / 18.0f);
+        const float maxCurve = 1.0f + driveAmount * 8.0f;
+        const float sideGain = juce::jlimit(0.0f, 2.0f, width);
+        const float cross = juce::jlimit(0.0f, 0.08f, crosstalk);
+        constexpr float threshold = 0.0630957f; // -24 dBFS
+        constexpr float kneeRange = 0.50f;
+        for (int i = 0; i < buffer.getNumSamples(); ++i) {
+            const float inL = left[i], inR = right[i];
+            const float detector = juce::jmax(std::abs(inL), std::abs(inR));
+            const float coeff = detector > envelope ? attackCoeff : releaseCoeff;
+            envelope = coeff * envelope + (1.0f - coeff) * detector;
+            const float activity = juce::jlimit(0.0f, 1.0f, (envelope - threshold) / kneeRange);
+            const float saturation = driveAmount * activity;
+            const float curve = 1.0f + saturation * (maxCurve - 1.0f);
+            const float mid = 0.5f * (inL + inR);
+            const float side = 0.5f * (inL - inR) * sideGain;
+            const float dryL = mid + side, dryR = mid - side;
+            const float shapedL = std::tanh(dryL * curve) / curve;
+            const float shapedR = std::tanh(dryR * curve) / curve;
+            const float outL = dryL + saturation * (shapedL - dryL);
+            const float outR = dryR + saturation * (shapedR - dryR);
+            left[i] = outL * (1.0f - cross) + outR * cross;
+            right[i] = outR * (1.0f - cross) + outL * cross;
+        }
+    }
+private:
+    float envelope = 0.0f, attackCoeff = 0.0f, releaseCoeff = 0.0f;
+};
+} // namespace ssl9000
