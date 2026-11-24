@@ -4,11 +4,40 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <memory>
 #include <thread>
 
 using namespace ssl9000::link;
 
 int main() {
+    // Session layout exposes fixed channel-to-bus and bus-to-master rings.
+    // Allocate on the heap: the shared mapping is intentionally several MiB.
+    {
+        auto session = std::make_unique<SharedSessionMemory>();
+        assert(!initializeSharedSession(*session, 0, 1234));
+        assert(!isCompatibleSession(*session));
+        assert(initializeSharedSession(*session, 48000, 1234));
+        assert(isCompatibleSession(*session));
+        assert(session->header.sampleRate == 48000);
+        assert(session->header.sessionNonce == 1234);
+        assert(session->header.byteSize == sizeof(SharedSessionMemory));
+
+        SharedSpscAudioRing channelRing(session->channelToBus[7]);
+        SharedSpscAudioRing masterRing(session->busToMaster[3]);
+        std::array<float, 2> frame { 0.25f, -0.25f };
+        std::array<float, 2> receivedFrame {};
+        BlockHeader h {};
+        h.sampleCount = 1;
+        h.projectSamplePosition = 900;
+        assert(channelRing.push(h, frame.data()));
+        BlockHeader receivedHeader {};
+        assert(channelRing.pop(receivedHeader, receivedFrame.data(), 1));
+        assert(receivedHeader.projectSamplePosition == 900);
+        assert(receivedFrame == frame);
+        assert(masterRing.push(h, frame.data()));
+        assert(masterRing.pop(receivedHeader, receivedFrame.data(), 1));
+    }
+
     SharedStreamRing shared {};
     SharedSpscAudioRing ring(shared);
 
