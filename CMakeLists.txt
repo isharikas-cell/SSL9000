@@ -47,3 +47,11 @@ target_include_directories(SSL9000Master PRIVATE Source/Shared)
 target_compile_features(SSL9000Master PRIVATE cxx_std_20)
 target_link_libraries(SSL9000Master PRIVATE juce::juce_audio_utils juce::juce_dsp)
 target_compile_definitions(SSL9000Master PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(ConsoleLinkRingTests Tests/ConsoleLinkRingTests.cpp)
+  target_compile_features(ConsoleLinkRingTests PRIVATE cxx_std_20)
+  add_test(NAME ConsoleLinkRingTests COMMAND ConsoleLinkRingTests)
+endif()
