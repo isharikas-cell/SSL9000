@@ -9,6 +9,7 @@
 #include <windows.h>
 
 #include <cstdint>
+#include <new>
 #include <string>
 #include <utility>
 
@@ -121,6 +122,19 @@ private:
     void* mappedView = nullptr;
     std::size_t mappedBytes = 0;
 };
+
+// Start C++ object lifetimes in a brand-new mapping, then publish initialized
+// metadata. Never call this for an already-existing mapping.
+inline SharedSessionMemory* initializeNewSharedSessionMapping(
+    WindowsSharedMemoryRegion& region,
+    std::uint32_t sampleRate,
+    std::uint64_t sessionNonce) noexcept {
+    if (!region || region.size() < sizeof(SharedSessionMemory))
+        return nullptr;
+    auto* session = ::new (region.data()) SharedSessionMemory {};
+    return initializeSharedSession(*session, sampleRate, sessionNonce)
+        ? session : nullptr;
+}
 
 // Validate an opened mapping before treating it as a Console Link session.
 // Only the process that received CreateResult::created may initialize it.
