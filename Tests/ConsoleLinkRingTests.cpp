@@ -7,13 +7,42 @@
 #include <cstdint>
 #include <memory>
 #include <thread>
+#include <string>
+#include <vector>
 #if defined(_WIN32)
 #include <windows.h>
 #endif
 
 using namespace ssl9000::link;
 
+#if defined(_WIN32)
+int wmain(int argc, wchar_t* argv[]) {
+    if (argc == 3 && std::wstring(argv[1]) == L"--consumer") {
+        WindowsSharedMemoryRegion region;
+        if (!region.open(argv[2], sizeof(SharedSessionMemory)))
+            return 10;
+        auto* session = validateSharedSessionMapping(region);
+        if (session == nullptr || session->header.sessionNonce != 0x90005678u)
+            return 11;
+
+        SharedSpscAudioRing receiver(session->channelToBus[5]);
+        std::array<float, 4> samples {};
+        BlockHeader header {};
+        const auto deadline = GetTickCount64() + 10000;
+        while (GetTickCount64() < deadline) {
+            if (receiver.pop(header, samples.data(), 2)) {
+                return header.projectSamplePosition == 1234567
+                    && header.sampleCount == 2
+                    && samples[0] == 0.125f && samples[1] == -0.125f
+                    && samples[2] == 0.25f && samples[3] == -0.25f ? 0 : 12;
+            }
+            Sleep(1);
+        }
+        return 13;
+    }
+#else
 int main() {
+#endif
 #if defined(_WIN32)
     // Verify that two independent mapping handles see the same session bytes.
     {
@@ -34,6 +63,58 @@ int main() {
         assert(openedSession != nullptr);
         assert(openedSession->header.sessionNonce == 0x90001234u);
         assert(openedSession->header.sampleRate == 48000);
+    }
+
+    // End-to-end test: a separate process opens the mapping and consumes audio.
+    {
+        const auto uniqueName = std::wstring(L"Local\\SSL9000CrossProcess_")
+            + std::to_wstring(GetCurrentProcessId()) + L"_"
+            + std::to_wstring(GetTickCount64());
+        WindowsSharedMemoryRegion creator;
+        assert(creator.create(uniqueName, sizeof(SharedSessionMemory))
+               == WindowsSharedMemoryRegion::CreateResult::created);
+        auto* session = initializeNewSharedSessionMapping(creator, 48000, 0x90005678u);
+        assert(session != nullptr);
+
+        std::array<wchar_t, 32768> executable {};
+        const auto pathLength = GetModuleFileNameW(nullptr, executable.data(),
+                                                   static_cast<DWORD>(executable.size()));
+        assert(pathLength > 0 && pathLength < executable.size());
+        std::wstring command = L"\\\"" + std::wstring(executable.data(), pathLength)
+            + L"\\\" --consumer \\\"" + uniqueName + L"\\\"";
+        std::vector<wchar_t> mutableCommand(command.begin(), command.end());
+        mutableCommand.push_back(L'\\0');
+
+        STARTUPINFOW startup {};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process {};
+        assert(CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE,
+                              CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process));
+
+        SharedSpscAudioRing sender(session->channelToBus[5]);
+        const float audio[] { 0.125f, -0.125f, 0.25f, -0.25f };
+        BlockHeader block {};
+        block.projectSamplePosition = 1234567;
+        block.sampleCount = 2;
+        block.channels = stereoChannels;
+        const auto pushDeadline = GetTickCount64() + 5000;
+        bool pushed = false;
+        while (GetTickCount64() < pushDeadline && !pushed) {
+            pushed = sender.push(block, audio);
+            if (!pushed)
+                Sleep(1);
+        }
+        assert(pushed);
+
+        const auto waitResult = WaitForSingleObject(process.hProcess, 10000);
+        if (waitResult != WAIT_OBJECT_0)
+            TerminateProcess(process.hProcess, 99);
+        DWORD childExitCode = 0;
+        const bool gotExitCode = GetExitCodeProcess(process.hProcess, &childExitCode) != FALSE;
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+        assert(waitResult == WAIT_OBJECT_0);
+        assert(gotExitCode && childExitCode == 0);
     }
 #endif
 
