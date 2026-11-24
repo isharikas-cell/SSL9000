@@ -25,8 +25,8 @@ int main() {
         assert(created == WindowsSharedMemoryRegion::CreateResult::created);
         assert(creator.size() == sizeof(SharedSessionMemory));
 
-        auto* session = static_cast<SharedSessionMemory*>(creator.data());
-        assert(initializeSharedSession(*session, 48000, 0x90001234u));
+        auto* session = initializeNewSharedSessionMapping(creator, 48000, 0x90001234u);
+        assert(session != nullptr);
 
         WindowsSharedMemoryRegion opener;
         assert(opener.open(uniqueName, sizeof(SharedSessionMemory)));
