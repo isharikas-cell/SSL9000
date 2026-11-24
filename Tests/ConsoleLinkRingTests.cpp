@@ -17,7 +17,7 @@ int main() {
 #if defined(_WIN32)
     // Verify that two independent mapping handles see the same session bytes.
     {
-        const auto uniqueName = std::wstring(L"Local\\\\SSL9000ConsoleLinkTest_")
+        const auto uniqueName = std::wstring(L"Local\\SSL9000ConsoleLinkTest_")
             + std::to_wstring(GetCurrentProcessId()) + L"_"
             + std::to_wstring(GetTickCount64());
         WindowsSharedMemoryRegion creator;
@@ -33,7 +33,7 @@ int main() {
         auto* openedSession = validateSharedSessionMapping(opener);
         assert(openedSession != nullptr);
         assert(openedSession->header.sessionNonce == 0x90001234u);
-        assert(openedSession == session || opener.data() != nullptr);
+        assert(openedSession->header.sampleRate == 48000);
     }
 #endif
 
