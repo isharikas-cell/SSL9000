@@ -1,15 +1,42 @@
 #include "../Source/Shared/ConsoleLinkProtocol.h"
 #include "../Source/Shared/BusSummingStage.h"
+#include "../Source/Shared/WindowsSharedMemory.h"
 
 #include <array>
 #include <cassert>
 #include <cstdint>
 #include <memory>
 #include <thread>
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 using namespace ssl9000::link;
 
 int main() {
+#if defined(_WIN32)
+    // Verify that two independent mapping handles see the same session bytes.
+    {
+        const auto uniqueName = std::wstring(L"Local\\\\SSL9000ConsoleLinkTest_")
+            + std::to_wstring(GetCurrentProcessId()) + L"_"
+            + std::to_wstring(GetTickCount64());
+        WindowsSharedMemoryRegion creator;
+        const auto created = creator.create(uniqueName, sizeof(SharedSessionMemory));
+        assert(created == WindowsSharedMemoryRegion::CreateResult::created);
+        assert(creator.size() == sizeof(SharedSessionMemory));
+
+        auto* session = static_cast<SharedSessionMemory*>(creator.data());
+        assert(initializeSharedSession(*session, 48000, 0x90001234u));
+
+        WindowsSharedMemoryRegion opener;
+        assert(opener.open(uniqueName, sizeof(SharedSessionMemory)));
+        auto* openedSession = validateSharedSessionMapping(opener);
+        assert(openedSession != nullptr);
+        assert(openedSession->header.sessionNonce == 0x90001234u);
+        assert(openedSession == session || opener.data() != nullptr);
+    }
+#endif
+
     // Session layout exposes fixed channel-to-bus and bus-to-master rings.
     // Allocate on the heap: the shared mapping is intentionally several MiB.
     {
