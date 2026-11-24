@@ -11,7 +11,7 @@ public:
         releaseCoeff = std::exp(-1.0f / (0.120f * sr));
         envelope = 0.0f;
     }
-    void process(juce::AudioBuffer<float>& buffer, float drive, float width, float crosstalk) noexcept {
+    void process(juce::AudioBuffer<float>& buffer, float drive, float width, float crosstalk, float thresholdDb = -24.0f) noexcept {
         if (buffer.getNumChannels() < 2) return;
         auto* left = buffer.getWritePointer(0);
         auto* right = buffer.getWritePointer(1);
@@ -19,9 +19,8 @@ public:
         const float maxCurve = 1.0f + driveAmount * 8.0f;
         const float sideGain = juce::jlimit(0.0f, 2.0f, width);
         const float cross = juce::jlimit(0.0f, 0.08f, crosstalk);
-        constexpr float threshold = 0.0630957f; // -24 dBFS
-        // A narrower knee makes saturation clearly engage on material around -20 dBFS.
-        // At -20 dBFS (linear peak 0.1), activity is approximately 0.31.
+        const float threshold = std::pow(10.0f, juce::jlimit(-60.0f, 0.0f, thresholdDb) / 20.0f);
+        // Narrow knee keeps the channel saturation audible around -20 dBFS.
         constexpr float kneeRange = 0.12f;
         for (int i = 0; i < buffer.getNumSamples(); ++i) {
             const float inL = left[i], inR = right[i];
