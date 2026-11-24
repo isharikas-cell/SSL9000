@@ -80,10 +80,10 @@ int main() {
         const auto pathLength = GetModuleFileNameW(nullptr, executable.data(),
                                                    static_cast<DWORD>(executable.size()));
         assert(pathLength > 0 && pathLength < executable.size());
-        std::wstring command = L"\\\"" + std::wstring(executable.data(), pathLength)
-            + L"\\\" --consumer \\\"" + uniqueName + L"\\\"";
+        std::wstring command = L"\"" + std::wstring(executable.data(), pathLength)
+            + L"\" --consumer \"" + uniqueName + L"\"";
         std::vector<wchar_t> mutableCommand(command.begin(), command.end());
-        mutableCommand.push_back(L'\\0');
+        mutableCommand.push_back(L'\0');
 
         STARTUPINFOW startup {};
         startup.cb = sizeof(startup);
