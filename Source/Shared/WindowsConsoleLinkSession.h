@@ -12,7 +12,7 @@ namespace ssl9000::link {
 // Do not derive this from a process ID: separate plugin processes must agree.
 class WindowsConsoleLinkSession {
 public:
-    enum class AttachResult { attached, created, invalidKey, incompatible, failed };
+    enum class AttachResult { attached, created, invalidKey, incompatible, abandonedInitialization, failed };
 
     AttachResult attach(const std::wstring& projectSessionKey,
                         std::uint32_t sampleRate) {
@@ -32,7 +32,8 @@ public:
         // process touches the C++ objects in the mapped view.
         InitializationMutexGuard initializationLock(name + L"_Init");
         if (!initializationLock.acquired())
-            return AttachResult::failed;
+            return initializationLock.wasAbandoned()
+                ? AttachResult::abandonedInitialization : AttachResult::failed;
 
         const auto result = region.create(name, sizeof(SharedSessionMemory));
         if (result == WindowsSharedMemoryRegion::CreateResult::failed)
@@ -73,6 +74,7 @@ private:
             // Do not inspect or overwrite that mapping automatically.
             ownsMutex = waitResult == WAIT_OBJECT_0 || waitResult == WAIT_ABANDONED;
             safeToProceed = waitResult == WAIT_OBJECT_0;
+            abandoned = waitResult == WAIT_ABANDONED;
         }
 
         InitializationMutexGuard(const InitializationMutexGuard&) = delete;
@@ -86,11 +88,13 @@ private:
         }
 
         bool acquired() const noexcept { return safeToProceed; }
+        bool wasAbandoned() const noexcept { return abandoned; }
 
     private:
         HANDLE handle = nullptr;
         bool ownsMutex = false;
         bool safeToProceed = false;
+        bool abandoned = false;
     };
 
     static bool isValidKey(const std::wstring& key) noexcept {
