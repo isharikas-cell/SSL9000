@@ -10,6 +10,22 @@
 #include "WindowsConsoleLinkSession.h"
 #endif
 
+
+class SSL9000ChannelProcessor;
+
+class SSL9000ChannelEditor final : public juce::AudioProcessorEditor {
+public:
+    explicit SSL9000ChannelEditor(SSL9000ChannelProcessor&);
+    void paint(juce::Graphics&) override;
+    void resized() override;
+private:
+    SSL9000ChannelProcessor& processor;
+    juce::Label titleLabel, sessionLabel, channelLabel, busLabel;
+    juce::TextEditor sessionKeyEditor;
+    juce::Slider channelSlider, busSlider;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> channelAttachment, busAttachment;
+};
+
 class SSL9000ChannelProcessor final : public juce::AudioProcessor {
 public:
     SSL9000ChannelProcessor()
@@ -100,7 +116,7 @@ public:
     }
 
     juce::AudioProcessorEditor* createEditor() override {
-        return new juce::GenericAudioProcessorEditor(*this);
+        return new SSL9000ChannelEditor(*this);
     }
     bool hasEditor() const override { return true; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -131,6 +147,65 @@ private:
     std::unique_ptr<ssl9000::link::ChannelAudioPublisher> publisher;
 #endif
 };
+
+
+SSL9000ChannelEditor::SSL9000ChannelEditor(SSL9000ChannelProcessor& p)
+    : AudioProcessorEditor(p), processor(p) {
+    setSize(440, 250);
+    titleLabel.setText("SSL9000 Channel", juce::dontSendNotification);
+    titleLabel.setFont(juce::Font(22.0f, juce::Font::bold));
+    addAndMakeVisible(titleLabel);
+    sessionLabel.setText("Project Session Key", juce::dontSendNotification);
+    addAndMakeVisible(sessionLabel);
+    sessionKeyEditor.setText(processor.state.state.getProperty("sessionKey").toString(), false);
+    sessionKeyEditor.setTextToShowWhenEmpty("Paste the same key into every linked plugin", juce::Colours::grey);
+    sessionKeyEditor.setInputRestrictions(64, "0123456789abcdefABCDEF-");
+    sessionKeyEditor.onFocusLost = [this] {
+        processor.state.state.setProperty("sessionKey", sessionKeyEditor.getText().trim(), nullptr);
+    };
+    sessionKeyEditor.onReturnKey = [this] {
+        processor.state.state.setProperty("sessionKey", sessionKeyEditor.getText().trim(), nullptr);
+        sessionKeyEditor.giveAwayKeyboardFocus();
+    };
+    addAndMakeVisible(sessionKeyEditor);
+    channelLabel.setText("Channel ID (0–31)", juce::dontSendNotification);
+    addAndMakeVisible(channelLabel);
+    channelSlider.setSliderStyle(juce::Slider::IncDecButtons);
+    channelSlider.setRange(0, 31, 1);
+    channelSlider.setTextBoxStyle(juce::Slider::TextBoxLeft, false, 55, 24);
+    addAndMakeVisible(channelSlider);
+    channelAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor.state, "channelId", channelSlider);
+    busLabel.setText("Bus ID (0–31)", juce::dontSendNotification);
+    addAndMakeVisible(busLabel);
+    busSlider.setSliderStyle(juce::Slider::IncDecButtons);
+    busSlider.setRange(0, 31, 1);
+    busSlider.setTextBoxStyle(juce::Slider::TextBoxLeft, false, 55, 24);
+    addAndMakeVisible(busSlider);
+    busAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor.state, "busId", busSlider);
+}
+
+void SSL9000ChannelEditor::paint(juce::Graphics& g) {
+    g.fillAll(juce::Colour(0xff20242a));
+    g.setColour(juce::Colours::white);
+    g.drawText("Console Link routing", 20, 118, getWidth() - 40, 24, juce::Justification::centredLeft);
+    g.setColour(juce::Colours::lightgrey);
+    g.drawText("Use the same project key on all linked SSL9000 instances.",
+               20, 218, getWidth() - 40, 20, juce::Justification::centredLeft);
+}
+
+void SSL9000ChannelEditor::resized() {
+    auto area = getLocalBounds().reduced(20);
+    titleLabel.setBounds(area.removeFromTop(34));
+    area.removeFromTop(12);
+    sessionLabel.setBounds(area.removeFromTop(20));
+    sessionKeyEditor.setBounds(area.removeFromTop(30));
+    channelLabel.setBounds(20, 151, 150, 28);
+    channelSlider.setBounds(175, 151, 220, 28);
+    busLabel.setBounds(20, 184, 150, 28);
+    busSlider.setBounds(175, 184, 220, 28);
+}
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {
     return new SSL9000ChannelProcessor();
