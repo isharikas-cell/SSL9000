@@ -79,6 +79,9 @@ public:
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) override {
         juce::ScopedNoDenormals noDenormals;
 #if defined(_WIN32)
+        // Master is fed exclusively by selected Bus Send streams. Do not
+        // pass its unrelated host input through when Console Link is offline.
+        buffer.clear();
         const auto count = buffer.getNumSamples();
         if (receiver && count > 0
             && count <= static_cast<int>(ssl9000::link::maxSamplesPerBlock)
