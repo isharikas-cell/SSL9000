@@ -112,7 +112,8 @@ int main() {
         const bool secondUsable = secondResult == WindowsConsoleLinkSession::AttachResult::created
             || secondResult == WindowsConsoleLinkSession::AttachResult::attached;
         if (!firstUsable || !secondUsable) {
-            std::fprintf(stderr, "Concurrent attach failed: first=%d second=%d (created=1, attached=0, invalidKey=2, incompatible=3, failed=4)\\n",
+            std::fprintf(stderr, "Concurrent attach failed: first=%d second=%d (created=1, attached=0, invalidKey=2, incompatible=3, failed=4)\
+",
                          static_cast<int>(firstResult), static_cast<int>(secondResult));
         }
         assert(firstUsable && secondUsable);
@@ -150,7 +151,8 @@ int main() {
             CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
         if (!childStarted) {
             const DWORD error = GetLastError();
-            std::fwprintf(stderr, L"CreateProcessW failed: error=%lu, executable=%ls\n",
+            std::fwprintf(stderr, L"CreateProcessW failed: error=%lu, executable=%ls
+",
                      error, executablePath.c_str());
             return 14;
         }
@@ -187,13 +189,17 @@ int main() {
     {
         auto session = std::make_unique<SharedSessionMemory>();
         assert(initializeSharedSession(*session, 48000, 0x9000b055u));
-        auto receiver = std::make_unique<BusAudioReceiver>(*session);\n        std::array<bool, maxChannels> assigned {};\n        assigned[0] = assigned[1] = assigned[2] = assigned[3] = assigned[4] = assigned[5] = true;\n        assert(receiver->configure(2, assigned));
+        auto receiver = std::make_unique<BusAudioReceiver>(*session);
+        std::array<bool, maxChannels> assigned {};
+        assigned[0] = assigned[1] = assigned[2] = assigned[3] = assigned[4] = assigned[5] = true;
+        assert(receiver->configure(2, assigned));
 
         SharedSpscAudioRing source0(session->channelToBus[0]);
         SharedSpscAudioRing source1(session->channelToBus[1]);
         SharedSpscAudioRing source2(session->channelToBus[2]);
         SharedSpscAudioRing source3(session->channelToBus[3]);
-        SharedSpscAudioRing source4(session->channelToBus[4]);\n        SharedSpscAudioRing unassignedSource(session->channelToBus[6]);
+        SharedSpscAudioRing source4(session->channelToBus[4]);
+        SharedSpscAudioRing unassignedSource(session->channelToBus[6]);
 
         const float earlier[] { 1.0f, 10.0f, 2.0f, 20.0f, 3.0f, 30.0f, 4.0f, 40.0f };
         const float aligned[] { 0.5f, -0.5f, 1.5f, -1.5f, 2.5f, -2.5f, 3.5f, -3.5f };
@@ -221,16 +227,20 @@ int main() {
         h.sourceId = 4;
         h.busId = 2;
         h.sampleCount = 1;
-        assert(source4.push(h, future));\n        h.projectSamplePosition = 100;\n        h.sourceId = 6;\n        h.busId = 1;\n        assert(unassignedSource.push(h, future));
+        assert(source4.push(h, future));
+        h.projectSamplePosition = 100;
+        h.sourceId = 6;
+        h.busId = 1;
+        assert(unassignedSource.push(h, future));
 
         std::array<float, 4> outL {}, outR {};
         assert(receiver->process(100, 4, outL.data(), outR.data()));
-        assert(std::abs(outL[0] - 3.5f) < 1.0e-6f);
-        assert(std::abs(outR[0] - 29.5f) < 1.0e-6f);
-        assert(std::abs(outL[1] - 5.5f) < 1.0e-6f);
-        assert(std::abs(outR[1] - 38.5f) < 1.0e-6f);
-        assert(std::abs(outL[2] - 2.5f) < 1.0e-6f);
-        assert(std::abs(outR[2] + 2.5f) < 1.0e-6f);
+        assert(std::abs(outL[0] - 2.5f) < 1.0e-6f);
+        assert(std::abs(outR[0] - 19.5f) < 1.0e-6f);
+        assert(std::abs(outL[1] - 3.5f) < 1.0e-6f);
+        assert(std::abs(outR[1] - 28.5f) < 1.0e-6f);
+        assert(std::abs(outL[2] - 4.5f) < 1.0e-6f);
+        assert(std::abs(outR[2] - 37.5f) < 1.0e-6f);
         assert(std::abs(outL[3] - 3.5f) < 1.0e-6f);
         assert(std::abs(outR[3] + 3.5f) < 1.0e-6f);
 
@@ -256,7 +266,12 @@ int main() {
         assert(std::abs(outL[0] - 0.3f) < 1.0e-6f);
         assert(std::abs(outL[1] - 0.4f) < 1.0e-6f);
 
-        BlockHeader untouchedHeader {};\n        std::array<float, 2> untouchedAudio {};\n        assert(unassignedSource.pop(untouchedHeader, untouchedAudio.data(), 1));\n        assert(untouchedHeader.sourceId == 6 && untouchedHeader.busId == 1);\n\n        const auto& stats = receiver->getDiagnostics();
+        BlockHeader untouchedHeader {};
+        std::array<float, 2> untouchedAudio {};
+        assert(unassignedSource.pop(untouchedHeader, untouchedAudio.data(), 1));
+        assert(untouchedHeader.sourceId == 6 && untouchedHeader.busId == 1);
+
+        const auto& stats = receiver->getDiagnostics();
         assert(stats.wrongRouteBlocks >= 1);
         assert(stats.staleBlocks >= 1);
         assert(!receiver->process(0, 1, outL.data(), outR.data()));
