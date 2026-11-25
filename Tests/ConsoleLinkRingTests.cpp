@@ -88,6 +88,34 @@ int main() {
         assert(invalid.attach(L"not-a-valid-session-key", 48000)
                == WindowsConsoleLinkSession::AttachResult::invalidKey);
     }
+    // Concurrent attachers must serialize creation: exactly one initializes,
+    // while the other validates and attaches to the completed mapping.
+    {
+        const auto key = std::wstring(L"9000")
+            + std::to_wstring(GetCurrentProcessId())
+            + std::to_wstring(GetTickCount64());
+        WindowsConsoleLinkSession first;
+        WindowsConsoleLinkSession second;
+        WindowsConsoleLinkSession::AttachResult firstResult =
+            WindowsConsoleLinkSession::AttachResult::failed;
+        WindowsConsoleLinkSession::AttachResult secondResult =
+            WindowsConsoleLinkSession::AttachResult::failed;
+
+        std::thread firstThread([&] { firstResult = first.attach(key, 48000); });
+        std::thread secondThread([&] { secondResult = second.attach(key, 48000); });
+        firstThread.join();
+        secondThread.join();
+
+        const bool firstUsable = firstResult == WindowsConsoleLinkSession::AttachResult::created
+            || firstResult == WindowsConsoleLinkSession::AttachResult::attached;
+        const bool secondUsable = secondResult == WindowsConsoleLinkSession::AttachResult::created
+            || secondResult == WindowsConsoleLinkSession::AttachResult::attached;
+        assert(firstUsable && secondUsable);
+        assert((firstResult == WindowsConsoleLinkSession::AttachResult::created)
+               != (secondResult == WindowsConsoleLinkSession::AttachResult::created));
+        assert(first.get() != nullptr && second.get() != nullptr);
+        assert(first.mappingName() == second.mappingName());
+    }
     // End-to-end test: a separate process opens the mapping and consumes audio.
     {
         const auto uniqueName = std::wstring(L"Local\\SSL9000CrossProcess_")
