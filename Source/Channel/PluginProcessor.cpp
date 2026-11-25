@@ -77,19 +77,23 @@ public:
         if (publisher && samples > 0
             && samples <= static_cast<int>(ssl9000::link::maxSamplesPerBlock)
             && b.getNumChannels() >= 2) {
-            const auto position = getPlayHead() != nullptr
-                ? getPlayHead()->getPosition() : std::nullopt;
-            if (position) {\n                const auto timeSamples = position->getTimeInSamples();\n                if (timeSamples) {
-                std::array<float, ssl9000::link::maxSamplesPerBlock * 2> interleaved {};
-                const auto* left = b.getReadPointer(0);
-                const auto* right = b.getReadPointer(1);
-                for (int i = 0; i < samples; ++i) {
-                    interleaved[static_cast<std::size_t>(i) * 2] = left[i];
-                    interleaved[static_cast<std::size_t>(i) * 2 + 1] = right[i];
+            if (auto* playHead = getPlayHead()) {
+                const auto position = playHead->getPosition();
+                if (position) {
+                    const auto timeSamples = position->getTimeInSamples();
+                    if (timeSamples) {
+                        std::array<float, ssl9000::link::maxSamplesPerBlock * 2> interleaved {};
+                        const auto* left = b.getReadPointer(0);
+                        const auto* right = b.getReadPointer(1);
+                        for (int i = 0; i < samples; ++i) {
+                            interleaved[static_cast<std::size_t>(i) * 2] = left[i];
+                            interleaved[static_cast<std::size_t>(i) * 2 + 1] = right[i];
+                        }
+                        (void) publisher->publish(*timeSamples,
+                                                  static_cast<std::uint32_t>(samples),
+                                                  interleaved.data());
+                    }
                 }
-                (void) publisher->publish(*position->getTimeInSamples(),
-                                          static_cast<std::uint32_t>(samples),
-                                          interleaved.data());
             }
         }
 #endif
