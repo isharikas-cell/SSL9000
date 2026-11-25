@@ -1,4 +1,5 @@
 #include "../Source/Shared/ConsoleLinkProtocol.h"
+#include "../Source/Shared/ChannelAudioPublisher.h"
 #include "../Source/Shared/BusSummingStage.h"
 #include "../Source/Shared/WindowsSharedMemory.h"
 
@@ -140,6 +141,21 @@ int main() {
         assert(session->header.sessionNonce == 1234);
         assert(session->header.byteSize == sizeof(SharedSessionMemory));
 
+        // Channel publisher binds source and destination identity to each block.
+        {
+            ChannelAudioPublisher publisher(session->channelToBus[9], 9, 6);
+            assert(publisher.isConfigured());
+            assert(publisher.publish(1200, 1, frame.data()));
+            BlockHeader publishedHeader {};
+            SharedSpscAudioRing busSixReceiver(session->channelToBus[9]);
+            assert(busSixReceiver.pop(publishedHeader, receivedFrame.data(), 1));
+            assert(publishedHeader.sourceId == 9 && publishedHeader.busId == 6);
+            assert(publishedHeader.projectSamplePosition == 1200);
+            assert(receivedFrame == frame);
+            ChannelAudioPublisher invalidPublisher(session->channelToBus[10], 32, 6);
+            assert(!invalidPublisher.isConfigured());
+            assert(!invalidPublisher.publish(1201, 1, frame.data()));
+        }
         SharedSpscAudioRing channelRing(session->channelToBus[7]);
         SharedSpscAudioRing secondChannelRing(session->channelToBus[8]);
         SharedSpscAudioRing masterRing(session->busToMaster[3]);
