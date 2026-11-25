@@ -36,6 +36,17 @@ public:
             return session != nullptr ? AttachResult::created : AttachResult::failed;
         }
 
+        // CreateFileMapping can report an existing mapping while its creator is
+        // still initializing the shared C++ objects. This bounded wait is only
+        // used during attach (never from an audio callback).
+        for (std::uint32_t attempt = 0;
+             attempt < initializationWaitAttempts
+                 && static_cast<SharedSessionMemory*>(region.data())->header.active.load(
+                        std::memory_order_acquire) != 1;
+             ++attempt) {
+            Sleep(initializationPollMilliseconds);
+        }
+
         session = validateSharedSessionMapping(region);
         if (session == nullptr || session->header.sessionNonce != nonce
             || session->header.sampleRate != sampleRate) {
@@ -51,6 +62,9 @@ public:
     void close() noexcept { session = nullptr; region.close(); }
 
 private:
+    static constexpr std::uint32_t initializationWaitAttempts = 100;
+    static constexpr DWORD initializationPollMilliseconds = 1;
+
     static bool isValidKey(const std::wstring& key) noexcept {
         // Require a UUID-like explicit token; reject whitespace and path syntax.
         if (key.size() < 16 || key.size() > 64)
