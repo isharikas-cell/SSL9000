@@ -15,7 +15,7 @@ public:
     enum class AttachResult { attached, created, invalidKey, incompatible, failed };
 
     AttachResult attach(const std::wstring& projectSessionKey,
-                        std::uint32_t sampleRate) noexcept {
+                        std::uint32_t sampleRate) {
         region.close();
         if (!isValidKey(projectSessionKey) || sampleRate == 0)
             return AttachResult::invalidKey;
