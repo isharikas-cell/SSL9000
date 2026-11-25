@@ -32,16 +32,28 @@ public:
         diagnostics = {};
     }
 
+    // Configure the fixed destination bus and the channel rings assigned to
+    // this receiver. Call only off the audio thread. Each source ring must be
+    // enabled for exactly one Bus Receive instance, preserving SPSC ownership.
+    bool configure(std::uint32_t destinationBus,
+                   const std::array<bool, maxChannels>& assignedSources) noexcept {
+        if (destinationBus >= maxBuses)
+            return false;
+        reset();
+        busId = destinationBus;
+        enabledSources = assignedSources;
+        configured = true;
+        return true;
+    }
+
     // Produces planar stereo for [projectSamplePosition, +sampleCount).
-    // Missing source data is silence. Packets from other buses and packets
-    // entirely before the requested range are discarded. A future/partial
-    // packet is retained and consumed on a later call.
-    bool process(std::uint32_t busId,
-                 std::int64_t projectSamplePosition,
+    // Missing source data is silence. A future/partial packet is retained and
+    // consumed on a later call. Unassigned channel rings are never touched.
+    bool process(std::int64_t projectSamplePosition,
                  std::uint32_t sampleCount,
                  float* outputLeft,
                  float* outputRight) noexcept {
-        if (busId >= maxBuses || projectSamplePosition < 0
+        if (!configured || projectSamplePosition < 0
             || sampleCount == 0 || sampleCount > maxSamplesPerBlock
             || outputLeft == nullptr || outputRight == nullptr)
             return false;
@@ -51,9 +63,11 @@ public:
         const auto targetStart = static_cast<std::uint64_t>(projectSamplePosition);
         const auto targetEnd = targetStart + sampleCount;
 
-        for (std::uint32_t sourceId = 0; sourceId < maxChannels; ++sourceId)
-            consumeSource(sourceId, busId, targetStart, targetEnd,
-                          outputLeft, outputRight);
+        for (std::uint32_t sourceId = 0; sourceId < maxChannels; ++sourceId) {
+            if (enabledSources[sourceId])
+                consumeSource(sourceId, busId, targetStart, targetEnd,
+                              outputLeft, outputRight);
+        }
 
         return true;
     }
