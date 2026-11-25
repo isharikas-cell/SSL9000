@@ -5,6 +5,7 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <thread>
 #include <string>
@@ -80,7 +81,8 @@ int main() {
         const auto pathLength = GetModuleFileNameW(nullptr, executable.data(),
                                                    static_cast<DWORD>(executable.size()));
         assert(pathLength > 0 && pathLength < executable.size());
-        std::wstring command = L"\"" + std::wstring(executable.data(), pathLength)
+        const std::wstring executablePath(executable.data(), pathLength);
+        std::wstring command = L"\"" + executablePath
             + L"\" --consumer \"" + uniqueName + L"\"";
         std::vector<wchar_t> mutableCommand(command.begin(), command.end());
         mutableCommand.push_back(L'\0');
@@ -88,8 +90,15 @@ int main() {
         STARTUPINFOW startup {};
         startup.cb = sizeof(startup);
         PROCESS_INFORMATION process {};
-        assert(CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE,
-                              CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process));
+        const BOOL childStarted = CreateProcessW(
+            executablePath.c_str(), mutableCommand.data(), nullptr, nullptr, FALSE,
+            CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
+        if (!childStarted) {
+            const DWORD error = GetLastError();
+            fwprintf(stderr, L"CreateProcessW failed: error=%lu, executable=%ls\\n",
+                     error, executablePath.c_str());
+            return 14;
+        }
 
         SharedSpscAudioRing sender(session->channelToBus[5]);
         const float audio[] { 0.125f, -0.125f, 0.25f, -0.25f };
