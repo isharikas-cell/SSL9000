@@ -2,6 +2,7 @@
 #include "../Source/Shared/ChannelAudioPublisher.h"
 #include "../Source/Shared/BusSummingStage.h"
 #include "../Source/Shared/WindowsSharedMemory.h"
+#include "../Source/Shared/WindowsConsoleLinkSession.h"
 
 #include <array>
 #include <cassert>
@@ -68,6 +69,24 @@ int main() {
         assert(openedSession->header.sampleRate == 48000);
     }
 
+    // Project-keyed session discovery is deterministic across independent plugin instances.
+    {
+        const std::wstring key = L"9000abcd-1234-5678-abcd-9000abcdef12";
+        WindowsConsoleLinkSession first;
+        assert(first.attach(key, 48000) == WindowsConsoleLinkSession::AttachResult::created
+               || first.attach(key, 48000) == WindowsConsoleLinkSession::AttachResult::attached);
+        assert(first.get() != nullptr);
+        WindowsConsoleLinkSession second;
+        assert(second.attach(key, 48000) == WindowsConsoleLinkSession::AttachResult::attached);
+        assert(second.get() != nullptr);
+        assert(first.mappingName() == second.mappingName());
+        assert(first.sessionNonce() == second.sessionNonce());
+        WindowsConsoleLinkSession wrongRate;
+        assert(wrongRate.attach(key, 44100) == WindowsConsoleLinkSession::AttachResult::incompatible);
+        WindowsConsoleLinkSession invalid;
+        assert(invalid.attach(L"not-a-valid-session-key", 48000)
+               == WindowsConsoleLinkSession::AttachResult::invalidKey);
+    }
     // End-to-end test: a separate process opens the mapping and consumes audio.
     {
         const auto uniqueName = std::wstring(L"Local\\SSL9000CrossProcess_")
