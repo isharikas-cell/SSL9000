@@ -10,7 +10,7 @@ namespace ssl9000::link {
 
 // Shared-memory ABI. Bump protocolVersion whenever any field/layout changes.
 // Create and initialize the mapping before audio processing starts.
-inline constexpr std::uint32_t protocolVersion = 1;
+inline constexpr std::uint32_t protocolVersion = 2;
 inline constexpr std::uint32_t maxChannels = 32;
 inline constexpr std::uint32_t maxBuses = 32;
 inline constexpr std::uint32_t maxSamplesPerBlock = 2048;
@@ -28,7 +28,10 @@ struct BlockHeader {
     std::uint32_t sampleCount = 0;
     std::uint32_t channels = stereoChannels;
     std::uint32_t flags = 0;
-    std::uint32_t reserved = 0;
+    // Routing identity: each channel has one selected destination bus.
+    // sourceId must match the channel ring index; busId selects its receiver.
+    std::uint32_t busId = 0;
+    std::uint32_t sourceId = 0;
 };
 
 struct alignas(64) SharedAudioSlot {
@@ -53,8 +56,10 @@ struct SharedSessionHeader {
     std::atomic<std::uint32_t> active { 0 };
 };
 
-// Fixed session layout: one publisher ring per channel and one completed-bus
-// ring per bus. Array indices are the stable channel/bus IDs for protocol v1.
+// Fixed session layout: one SPSC publisher ring per channel and one completed-bus
+// ring per bus. A channel publishes to exactly one bus at a time; busId in each
+// block routes it to that bus. Only that bus receiver may consume the channel ring.
+// This avoids a large per-(bus,channel) ring matrix and preserves SPSC ownership.
 struct alignas(64) SharedSessionMemory {
     SharedSessionHeader header {};
     std::array<SharedStreamRing, maxChannels> channelToBus {};
