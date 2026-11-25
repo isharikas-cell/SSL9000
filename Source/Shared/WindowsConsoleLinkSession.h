@@ -17,6 +17,7 @@ public:
     AttachResult attach(const std::wstring& projectSessionKey,
                         std::uint32_t sampleRate) {
         region.close();
+        session = nullptr;
         if (!isValidKey(projectSessionKey) || sampleRate == 0)
             return AttachResult::invalidKey;
 
@@ -68,7 +69,8 @@ private:
             // WAIT_ABANDONED means a previous creator may have died while the
             // mapping's C++ object lifetime was only partially initialized.
             // Do not inspect or overwrite that mapping automatically.
-            ownsMutex = waitResult == WAIT_OBJECT_0;
+            ownsMutex = waitResult == WAIT_OBJECT_0 || waitResult == WAIT_ABANDONED;
+            safeToProceed = waitResult == WAIT_OBJECT_0;
         }
 
         InitializationMutexGuard(const InitializationMutexGuard&) = delete;
@@ -81,11 +83,12 @@ private:
                 CloseHandle(handle);
         }
 
-        bool acquired() const noexcept { return ownsMutex; }
+        bool acquired() const noexcept { return safeToProceed; }
 
     private:
         HANDLE handle = nullptr;
         bool ownsMutex = false;
+        bool safeToProceed = false;
     };
 
     static constexpr DWORD initializationMutexWaitMilliseconds = 5000;
