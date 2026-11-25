@@ -91,7 +91,7 @@ int main() {
     // Concurrent attachers must serialize creation: exactly one initializes,
     // while the other validates and attaches to the completed mapping.
     {
-        const auto key = std::wstring(L"9000-concurrent-")
+        const auto key = std::wstring(L"9000c0de-")
             + std::to_wstring(GetCurrentProcessId())
             + std::to_wstring(GetTickCount64());
         WindowsConsoleLinkSession first;
