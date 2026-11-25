@@ -122,6 +122,34 @@ int main() {
         assert(first.get() != nullptr && second.get() != nullptr);
         assert(first.mappingName() == second.mappingName());
     }
+    // An abandoned initialization mutex is reported distinctly and is never
+    // treated as permission to inspect or reinitialize a possibly partial mapping.
+    {
+        const std::wstring key = L"9000dead-beef-1234-5678-abcdef123456";
+        WindowsConsoleLinkSession creator;
+        const auto created = creator.attach(key, 48000);
+        assert(created == WindowsConsoleLinkSession::AttachResult::created
+               || created == WindowsConsoleLinkSession::AttachResult::attached);
+        const auto mutexName = creator.mappingName() + L"_Init";
+        HANDLE mutex = CreateMutexW(nullptr, FALSE, mutexName.c_str());
+        assert(mutex != nullptr);
+        std::atomic<bool> ownsMutex { false };
+        std::thread abandonedOwner([&] {
+            const auto wait = WaitForSingleObject(mutex, 5000);
+            assert(wait == WAIT_OBJECT_0);
+            ownsMutex.store(true, std::memory_order_release);
+            // Deliberately exit while owning the mutex to simulate a crashed initializer.
+        });
+        abandonedOwner.join();
+        assert(ownsMutex.load(std::memory_order_acquire));
+
+        WindowsConsoleLinkSession rejected;
+        assert(rejected.attach(key, 48000)
+               == WindowsConsoleLinkSession::AttachResult::abandonedInitialization);
+        assert(rejected.get() == nullptr);
+        assert(creator.get() != nullptr); // Existing owner mapping was not modified.
+        CloseHandle(mutex);
+    }
     // End-to-end test: a separate process opens the mapping and consumes audio.
     {
         const auto uniqueName = std::wstring(L"Local\\SSL9000CrossProcess_")
