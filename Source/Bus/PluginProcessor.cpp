@@ -107,6 +107,9 @@ public:
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) override {
         juce::ScopedNoDenormals noDenormals;
 #if defined(_WIN32) && !SSL9000_BUS_SEND
+        // Bus Receive is a source, not an insert-through effect. Never leave
+        // the host input in place when the shared receiver is unavailable.
+        buffer.clear();
         const auto count = buffer.getNumSamples();
         if (receiver && count > 0 && count <= static_cast<int>(ssl9000::link::maxSamplesPerBlock)
             && buffer.getNumChannels() >= 2) {
