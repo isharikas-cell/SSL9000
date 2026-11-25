@@ -36,15 +36,19 @@ public:
             return session != nullptr ? AttachResult::created : AttachResult::failed;
         }
 
-        // CreateFileMapping can report an existing mapping while its creator is
-        // still initializing the shared C++ objects. This bounded wait is only
-        // used during attach (never from an audio callback).
-        for (std::uint32_t attempt = 0;
-             attempt < initializationWaitAttempts
-                 && static_cast<SharedSessionMemory*>(region.data())->header.active.load(
-                        std::memory_order_acquire) != 1;
-             ++attempt) {
-            Sleep(initializationPollMilliseconds);
+        // Serialize creator initialization and opener validation before either
+        // process touches the C++ objects in the mapped view.
+        InitializationMutexGuard initializationLock(name + L"_Init");
+        if (!initializationLock.acquired())
+            return AttachResult::failed;
+
+        const auto result = region.create(name, sizeof(SharedSessionMemory));
+        if (result == WindowsSharedMemoryRegion::CreateResult::failed)
+            return AttachResult::failed;
+
+        if (result == WindowsSharedMemoryRegion::CreateResult::created) {
+            session = initializeNewSharedSessionMapping(region, sampleRate, nonce);
+            return session != nullptr ? AttachResult::created : AttachResult::failed;
         }
 
         session = validateSharedSessionMapping(region);
@@ -62,8 +66,38 @@ public:
     void close() noexcept { session = nullptr; region.close(); }
 
 private:
-    static constexpr std::uint32_t initializationWaitAttempts = 100;
-    static constexpr DWORD initializationPollMilliseconds = 1;
+    class InitializationMutexGuard {
+    public:
+        explicit InitializationMutexGuard(const std::wstring& mutexName) noexcept {
+            handle = CreateMutexW(nullptr, FALSE, mutexName.c_str());
+            if (handle == nullptr)
+                return;
+
+            const auto waitResult = WaitForSingleObject(handle, initializationMutexWaitMilliseconds);
+            // WAIT_ABANDONED means a previous creator may have died while the
+            // mapping's C++ object lifetime was only partially initialized.
+            // Do not inspect or overwrite that mapping automatically.
+            ownsMutex = waitResult == WAIT_OBJECT_0;
+        }
+
+        InitializationMutexGuard(const InitializationMutexGuard&) = delete;
+        InitializationMutexGuard& operator=(const InitializationMutexGuard&) = delete;
+
+        ~InitializationMutexGuard() {
+            if (ownsMutex)
+                ReleaseMutex(handle);
+            if (handle != nullptr)
+                CloseHandle(handle);
+        }
+
+        bool acquired() const noexcept { return ownsMutex; }
+
+    private:
+        HANDLE handle = nullptr;
+        bool ownsMutex = false;
+    };
+
+    static constexpr DWORD initializationMutexWaitMilliseconds = 5000;
 
     static bool isValidKey(const std::wstring& key) noexcept {
         // Require a UUID-like explicit token; reject whitespace and path syntax.
