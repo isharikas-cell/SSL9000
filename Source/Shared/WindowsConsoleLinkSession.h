@@ -27,15 +27,6 @@ public:
         if (nonce == 0)
             nonce = 1;
 
-        const auto result = region.create(name, sizeof(SharedSessionMemory));
-        if (result == WindowsSharedMemoryRegion::CreateResult::failed)
-            return AttachResult::failed;
-
-        if (result == WindowsSharedMemoryRegion::CreateResult::created) {
-            session = initializeNewSharedSessionMapping(region, sampleRate, nonce);
-            return session != nullptr ? AttachResult::created : AttachResult::failed;
-        }
-
         // Serialize creator initialization and opener validation before either
         // process touches the C++ objects in the mapped view.
         InitializationMutexGuard initializationLock(name + L"_Init");
