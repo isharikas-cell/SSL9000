@@ -110,6 +110,10 @@ int main() {
             || firstResult == WindowsConsoleLinkSession::AttachResult::attached;
         const bool secondUsable = secondResult == WindowsConsoleLinkSession::AttachResult::created
             || secondResult == WindowsConsoleLinkSession::AttachResult::attached;
+        if (!firstUsable || !secondUsable) {
+            std::fprintf(stderr, "Concurrent attach failed: first=%d second=%d (created=1, attached=0, invalidKey=2, incompatible=3, failed=4)\\n",
+                         static_cast<int>(firstResult), static_cast<int>(secondResult));
+        }
         assert(firstUsable && secondUsable);
         assert((firstResult == WindowsConsoleLinkSession::AttachResult::created)
                != (secondResult == WindowsConsoleLinkSession::AttachResult::created));
