@@ -76,7 +76,9 @@ public:
             token = token.trim();
             const auto dash = token.indexOfChar('-');
             const auto first = (dash < 0 ? token : token.substring(0, dash)).getIntValue();
-            const auto last = (dash < 0 ? first : token.substring(dash + 1)).getIntValue();
+            auto last = first;
+            if (dash >= 0)
+                last = token.substring(dash + 1).getIntValue();
             if (first < 0 || last < first || last >= static_cast<int>(ssl9000::link::maxChannels))
                 continue;
             for (int id = first; id <= last; ++id)
