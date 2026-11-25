@@ -25,7 +25,6 @@ public:
         // Console Link configuration is persisted with the plugin state. The
         // session key is deliberately explicit: separate plugin instances must
         // be given the same project token by the user.
-        p.add(std::make_unique<juce::AudioParameterString>("sessionKey", "Console Link Session Key", juce::String{}));
         p.add(std::make_unique<juce::AudioParameterInt>("channelId", "Console Link Channel ID", 0, 31, 0));
         p.add(std::make_unique<juce::AudioParameterInt>("busId", "Console Link Bus ID", 0, 31, 0));
         return p;
@@ -37,12 +36,12 @@ public:
         saturation.prepare(sampleRate);
 #if defined(_WIN32)
         publisher.reset();
-        const auto key = state.getParameter("sessionKey")->getValueAsText().trim();
+        const auto key = state.state.getProperty("sessionKey").toString().trim();
         const auto channel = static_cast<std::uint32_t>(state.getRawParameterValue("channelId")->load());
         const auto bus = static_cast<std::uint32_t>(state.getRawParameterValue("busId")->load());
         if (key.isNotEmpty() && channel < ssl9000::link::maxChannels
             && bus < ssl9000::link::maxBuses) {
-            const auto result = linkSession.attach(key.toWideCharPointer(),
+            const auto result = linkSession.attach(std::wstring(key.toWideCharPointer()),
                                                    static_cast<std::uint32_t>(sampleRate));
             if ((result == ssl9000::link::WindowsConsoleLinkSession::AttachResult::created
                  || result == ssl9000::link::WindowsConsoleLinkSession::AttachResult::attached)
@@ -80,7 +79,7 @@ public:
             && b.getNumChannels() >= 2) {
             const auto position = getPlayHead() != nullptr
                 ? getPlayHead()->getPosition() : std::nullopt;
-            if (position.has_value() && position->getTimeInSamples().has_value()) {
+            if (position) {\n                const auto timeSamples = position->getTimeInSamples();\n                if (timeSamples) {
                 std::array<float, ssl9000::link::maxSamplesPerBlock * 2> interleaved {};
                 const auto* left = b.getReadPointer(0);
                 const auto* right = b.getReadPointer(1);
