@@ -151,6 +151,9 @@ private:
 
     SharedSessionMemory& session;
     std::array<SourceState, maxChannels> sources {};
+    std::array<bool, maxChannels> enabledSources {};
+    std::uint32_t busId = 0;
+    bool configured = false;
     Diagnostics diagnostics {};
 };
 
