@@ -161,6 +161,11 @@ int main() {
         assert(session->header.sessionNonce == 1234);
         assert(session->header.byteSize == sizeof(SharedSessionMemory));
 
+        SharedSpscAudioRing channelRing(session->channelToBus[7]);
+        SharedSpscAudioRing secondChannelRing(session->channelToBus[8]);
+        SharedSpscAudioRing masterRing(session->busToMaster[3]);
+        std::array<float, 2> frame { 0.25f, -0.25f };
+        std::array<float, 2> receivedFrame {};
         // Channel publisher binds source and destination identity to each block.
         {
             ChannelAudioPublisher publisher(session->channelToBus[9], 9, 6);
@@ -176,11 +181,7 @@ int main() {
             assert(!invalidPublisher.isConfigured());
             assert(!invalidPublisher.publish(1201, 1, frame.data()));
         }
-        SharedSpscAudioRing channelRing(session->channelToBus[7]);
-        SharedSpscAudioRing secondChannelRing(session->channelToBus[8]);
-        SharedSpscAudioRing masterRing(session->busToMaster[3]);
-        std::array<float, 2> frame { 0.25f, -0.25f };
-        std::array<float, 2> receivedFrame {};
+
         BlockHeader h {};
         h.sampleCount = 1;
         h.projectSamplePosition = 900;
