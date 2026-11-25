@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <cwchar>
 #include <memory>
 #include <thread>
 #include <string>
@@ -95,7 +96,7 @@ int main() {
             CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
         if (!childStarted) {
             const DWORD error = GetLastError();
-            fwprintf(stderr, L"CreateProcessW failed: error=%lu, executable=%ls\\n",
+            std::fwprintf(stderr, L"CreateProcessW failed: error=%lu, executable=%ls\n",
                      error, executablePath.c_str());
             return 14;
         }
