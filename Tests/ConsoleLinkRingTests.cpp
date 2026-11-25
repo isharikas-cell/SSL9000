@@ -2,6 +2,7 @@
 #include "../Source/Shared/ChannelAudioPublisher.h"
 #include "../Source/Shared/BusSummingStage.h"
 #include "../Source/Shared/BusAudioReceiver.h"
+#include "../Source/Shared/BusAudioPublisher.h"
 #include "../Source/Shared/WindowsSharedMemory.h"
 #include "../Source/Shared/WindowsConsoleLinkSession.h"
 
@@ -305,6 +306,28 @@ int main() {
         assert(receiver->process(0, 1, outL.data(), outR.data()));
         assert(outL[0] == 0.0f && outR[0] == 0.0f);
         assert(!receiver->process(-1, 1, outL.data(), outR.data()));
+    }
+
+    // Bus Send publishes the post-effects stereo bus stream into its own SPSC ring.
+    {
+        auto session = std::make_unique<SharedSessionMemory>();
+        assert(initializeSharedSession(*session, 48000, 0x9000b055u));
+        BusAudioPublisher sender(session->busToMaster[4], 4);
+        assert(sender.isConfigured());
+        const float samples[] { 0.125f, -0.125f, 0.25f, -0.25f };
+        assert(sender.publish(98765, 2, samples));
+        SharedSpscAudioRing masterReader(session->busToMaster[4]);
+        std::array<float, 4> received {};
+        BlockHeader header {};
+        assert(masterReader.pop(header, received.data(), 2));
+        assert(header.busId == 4 && header.sourceId == 4);
+        assert(header.projectSamplePosition == 98765 && header.sampleCount == 2);
+        assert(received[0] == samples[0] && received[3] == samples[3]);
+        assert(!sender.publish(-1, 2, samples));
+        assert(!sender.publish(98767, maxSamplesPerBlock + 1, samples));
+        BusAudioPublisher invalid(session->busToMaster[32], 32);
+        assert(!invalid.isConfigured());
+        assert(!invalid.publish(98765, 2, samples));
     }
 
     // Session layout exposes fixed channel-to-bus and bus-to-master rings.
