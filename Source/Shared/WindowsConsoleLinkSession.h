@@ -58,6 +58,8 @@ public:
     void close() noexcept { session = nullptr; region.close(); }
 
 private:
+    static constexpr DWORD initializationMutexWaitMilliseconds = 5000;
+
     class InitializationMutexGuard {
     public:
         explicit InitializationMutexGuard(const std::wstring& mutexName) noexcept {
@@ -90,8 +92,6 @@ private:
         bool ownsMutex = false;
         bool safeToProceed = false;
     };
-
-    static constexpr DWORD initializationMutexWaitMilliseconds = 5000;
 
     static bool isValidKey(const std::wstring& key) noexcept {
         // Require a UUID-like explicit token; reject whitespace and path syntax.
