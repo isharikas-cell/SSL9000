@@ -3,6 +3,7 @@
 #include "../Source/Shared/BusSummingStage.h"
 #include "../Source/Shared/BusAudioReceiver.h"
 #include "../Source/Shared/BusAudioPublisher.h"
+#include "../Source/Shared/MasterAudioReceiver.h"
 #include "../Source/Shared/WindowsSharedMemory.h"
 #include "../Source/Shared/WindowsConsoleLinkSession.h"
 
@@ -457,6 +458,43 @@ int main() {
     producer.join();
     consumer.join();
     assert(!failed.load(std::memory_order_relaxed));
+
+    // Master receiver sums selected Bus Send streams on the shared sample timeline.
+    {
+        auto session = std::make_unique<SharedSessionMemory>();
+        assert(initializeSharedSession(*session, 48000, 0x9000a55au));
+        MasterAudioReceiver master(*session);
+        std::array<bool, maxBuses> selected {};
+        selected[1] = true;
+        selected[4] = true;
+        assert(master.configure(selected));
+
+        BusAudioPublisher bus1(session->busToMaster[1], 1);
+        BusAudioPublisher bus4(session->busToMaster[4], 4);
+        const float a[] { 0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f, 0.4f, -0.4f };
+        const float b[] { 0.5f, -0.5f, 0.6f, -0.6f, 0.7f, -0.7f, 0.8f, -0.8f };
+        assert(bus1.publish(100, 4, a));
+        assert(bus4.publish(100, 4, b));
+        // This unselected bus must remain unread and must not enter the sum.
+        BusAudioPublisher ignored(session->busToMaster[2], 2);
+        assert(ignored.publish(100, 4, b));
+
+        std::array<float, 4> left {}, right {};
+        assert(master.process(100, 4, left.data(), right.data()));
+        for (std::size_t i = 0; i < 4; ++i) {
+            assert(std::abs(left[i] - (a[i * 2] + b[i * 2])) < 1.0e-6f);
+            assert(std::abs(right[i] - (a[i * 2 + 1] + b[i * 2 + 1])) < 1.0e-6f);
+        }
+
+        // Retain a future block and consume it when the host timeline reaches it.
+        assert(bus1.publish(110, 2, a));
+        assert(master.process(108, 2, left.data(), right.data()));
+        assert(left[0] == 0.0f && left[1] == 0.0f);
+        assert(master.process(110, 2, left.data(), right.data()));
+        assert(std::abs(left[0] - a[0]) < 1.0e-6f);
+        assert(std::abs(right[1] - a[3]) < 1.0e-6f);
+        assert(!master.process(-1, 2, left.data(), right.data()));
+    }
 
     // Bus summing is linear and transparent when drive is disabled.
     {
