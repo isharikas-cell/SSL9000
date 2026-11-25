@@ -325,7 +325,8 @@ int main() {
         assert(received[0] == samples[0] && received[3] == samples[3]);
         assert(!sender.publish(-1, 2, samples));
         assert(!sender.publish(98767, maxSamplesPerBlock + 1, samples));
-        BusAudioPublisher invalid(session->busToMaster[32], 32);
+        SharedStreamRing invalidRing {};
+        BusAudioPublisher invalid(invalidRing, 32);
         assert(!invalid.isConfigured());
         assert(!invalid.publish(98765, 2, samples));
     }
