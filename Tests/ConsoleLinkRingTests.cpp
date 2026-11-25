@@ -1,6 +1,7 @@
 #include "../Source/Shared/ConsoleLinkProtocol.h"
 #include "../Source/Shared/ChannelAudioPublisher.h"
 #include "../Source/Shared/BusSummingStage.h"
+#include "../Source/Shared/BusAudioReceiver.h"
 #include "../Source/Shared/WindowsSharedMemory.h"
 #include "../Source/Shared/WindowsConsoleLinkSession.h"
 
@@ -180,6 +181,87 @@ int main() {
         assert(gotExitCode && childExitCode == 0);
     }
 #endif
+
+    // Bus receiver aligns packets by absolute sample position, sums sources,
+    // retains future/partial packets, and rejects stale or misrouted blocks.
+    {
+        auto session = std::make_unique<SharedSessionMemory>();
+        assert(initializeSharedSession(*session, 48000, 0x9000b055u));
+        auto receiver = std::make_unique<BusAudioReceiver>(*session);
+
+        SharedSpscAudioRing source0(session->channelToBus[0]);
+        SharedSpscAudioRing source1(session->channelToBus[1]);
+        SharedSpscAudioRing source2(session->channelToBus[2]);
+        SharedSpscAudioRing source3(session->channelToBus[3]);
+        SharedSpscAudioRing source4(session->channelToBus[4]);
+
+        const float earlier[] { 1.0f, 10.0f, 2.0f, 20.0f, 3.0f, 30.0f, 4.0f, 40.0f };
+        const float aligned[] { 0.5f, -0.5f, 1.5f, -1.5f, 2.5f, -2.5f, 3.5f, -3.5f };
+        BlockHeader h {};
+        h.sampleCount = 4;
+        h.projectSamplePosition = 98;
+        h.sourceId = 0;
+        h.busId = 2;
+        assert(source0.push(h, earlier));
+        h.projectSamplePosition = 100;
+        h.sourceId = 1;
+        assert(source1.push(h, aligned));
+
+        // A future packet is held; a wrong-bus packet and stale packet are dropped.
+        const float future[] { 0.25f, -0.25f, 0.5f, -0.5f };
+        h.projectSamplePosition = 110;
+        h.sampleCount = 2;
+        h.sourceId = 2;
+        assert(source2.push(h, future));
+        h.projectSamplePosition = 100;
+        h.sourceId = 3;
+        h.busId = 1;
+        assert(source3.push(h, future));
+        h.projectSamplePosition = 90;
+        h.sourceId = 4;
+        h.busId = 2;
+        h.sampleCount = 1;
+        assert(source4.push(h, future));
+
+        std::array<float, 4> outL {}, outR {};
+        assert(receiver->process(2, 100, 4, outL.data(), outR.data()));
+        assert(std::abs(outL[0] - 3.5f) < 1.0e-6f);
+        assert(std::abs(outR[0] - 29.5f) < 1.0e-6f);
+        assert(std::abs(outL[1] - 5.5f) < 1.0e-6f);
+        assert(std::abs(outR[1] - 28.5f) < 1.0e-6f);
+        assert(std::abs(outL[2] - 2.5f) < 1.0e-6f);
+        assert(std::abs(outR[2] - 27.5f) < 1.0e-6f);
+        assert(std::abs(outL[3] - 3.5f) < 1.0e-6f);
+        assert(std::abs(outR[3] - 26.5f) < 1.0e-6f);
+
+        // Source 2's future block is retained until its timestamp is requested.
+        assert(receiver->process(2, 108, 2, outL.data(), outR.data()));
+        assert(outL[0] == 0.0f && outL[1] == 0.0f);
+        assert(receiver->process(2, 110, 2, outL.data(), outR.data()));
+        assert(std::abs(outL[0] - 0.25f) < 1.0e-6f);
+        assert(std::abs(outR[1] + 0.5f) < 1.0e-6f);
+
+        // A single larger packet can be consumed across smaller host callbacks.
+        const float split[] { 0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f, 0.4f, -0.4f };
+        h.projectSamplePosition = 200;
+        h.sampleCount = 4;
+        h.sourceId = 5;
+        h.busId = 2;
+        SharedSpscAudioRing source5(session->channelToBus[5]);
+        assert(source5.push(h, split));
+        assert(receiver->process(2, 200, 2, outL.data(), outR.data()));
+        assert(std::abs(outL[0] - 0.1f) < 1.0e-6f);
+        assert(std::abs(outL[1] - 0.2f) < 1.0e-6f);
+        assert(receiver->process(2, 202, 2, outL.data(), outR.data()));
+        assert(std::abs(outL[0] - 0.3f) < 1.0e-6f);
+        assert(std::abs(outL[1] - 0.4f) < 1.0e-6f);
+
+        const auto& stats = receiver->getDiagnostics();
+        assert(stats.wrongRouteBlocks >= 1);
+        assert(stats.staleBlocks >= 1);
+        assert(!receiver->process(32, 0, 1, outL.data(), outR.data()));
+        assert(!receiver->process(2, -1, 1, outL.data(), outR.data()));
+    }
 
     // Session layout exposes fixed channel-to-bus and bus-to-master rings.
     // Allocate on the heap: the shared mapping is intentionally several MiB.
