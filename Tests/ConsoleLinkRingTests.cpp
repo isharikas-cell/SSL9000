@@ -273,7 +273,9 @@ int main() {
         const auto& stats = receiver->getDiagnostics();
         assert(stats.wrongRouteBlocks >= 1);
         assert(stats.staleBlocks >= 1);
-        assert(!receiver->process(0, 1, outL.data(), outR.data()));
+        // Sample position zero is valid; an empty source set yields silence.
+        assert(receiver->process(0, 1, outL.data(), outR.data()));
+        assert(outL[0] == 0.0f && outR[0] == 0.0f);
         assert(!receiver->process(-1, 1, outL.data(), outR.data()));
     }
 
