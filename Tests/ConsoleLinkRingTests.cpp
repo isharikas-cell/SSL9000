@@ -73,8 +73,9 @@ int main() {
     {
         const std::wstring key = L"9000abcd-1234-5678-abcd-9000abcdef12";
         WindowsConsoleLinkSession first;
-        assert(first.attach(key, 48000) == WindowsConsoleLinkSession::AttachResult::created
-               || first.attach(key, 48000) == WindowsConsoleLinkSession::AttachResult::attached);
+        const auto firstResult = first.attach(key, 48000);
+        assert(firstResult == WindowsConsoleLinkSession::AttachResult::created
+               || firstResult == WindowsConsoleLinkSession::AttachResult::attached);
         assert(first.get() != nullptr);
         WindowsConsoleLinkSession second;
         assert(second.attach(key, 48000) == WindowsConsoleLinkSession::AttachResult::attached);
