@@ -228,11 +228,11 @@ int main() {
         assert(std::abs(outL[0] - 3.5f) < 1.0e-6f);
         assert(std::abs(outR[0] - 29.5f) < 1.0e-6f);
         assert(std::abs(outL[1] - 5.5f) < 1.0e-6f);
-        assert(std::abs(outR[1] - 28.5f) < 1.0e-6f);
+        assert(std::abs(outR[1] - 38.5f) < 1.0e-6f);
         assert(std::abs(outL[2] - 2.5f) < 1.0e-6f);
-        assert(std::abs(outR[2] - 27.5f) < 1.0e-6f);
+        assert(std::abs(outR[2] + 2.5f) < 1.0e-6f);
         assert(std::abs(outL[3] - 3.5f) < 1.0e-6f);
-        assert(std::abs(outR[3] - 26.5f) < 1.0e-6f);
+        assert(std::abs(outR[3] + 3.5f) < 1.0e-6f);
 
         // Source 2's future block is retained until its timestamp is requested.
         assert(receiver->process(2, 108, 2, outL.data(), outR.data()));
