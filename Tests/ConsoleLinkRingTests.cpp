@@ -141,17 +141,33 @@ int main() {
         assert(session->header.byteSize == sizeof(SharedSessionMemory));
 
         SharedSpscAudioRing channelRing(session->channelToBus[7]);
+        SharedSpscAudioRing secondChannelRing(session->channelToBus[8]);
         SharedSpscAudioRing masterRing(session->busToMaster[3]);
         std::array<float, 2> frame { 0.25f, -0.25f };
         std::array<float, 2> receivedFrame {};
         BlockHeader h {};
         h.sampleCount = 1;
         h.projectSamplePosition = 900;
+        h.busId = 3;
+        h.sourceId = 7;
         assert(channelRing.push(h, frame.data()));
         BlockHeader receivedHeader {};
         assert(channelRing.pop(receivedHeader, receivedFrame.data(), 1));
         assert(receivedHeader.projectSamplePosition == 900);
+        assert(receivedHeader.busId == 3 && receivedHeader.sourceId == 7);
         assert(receivedFrame == frame);
+
+        // A second channel can target a different bus without sharing its ring.
+        h.busId = 4;
+        h.sourceId = 8;
+        h.projectSamplePosition = 901;
+        assert(secondChannelRing.push(h, frame.data()));
+        assert(secondChannelRing.pop(receivedHeader, receivedFrame.data(), 1));
+        assert(receivedHeader.busId == 4 && receivedHeader.sourceId == 8);
+        assert(receivedHeader.projectSamplePosition == 901);
+
+        h.busId = 3;
+        h.sourceId = 7;
         assert(masterRing.push(h, frame.data()));
         assert(masterRing.pop(receivedHeader, receivedFrame.data(), 1));
     }
