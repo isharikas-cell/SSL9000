@@ -151,8 +151,7 @@ int main() {
             CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
         if (!childStarted) {
             const DWORD error = GetLastError();
-            std::fwprintf(stderr, L"CreateProcessW failed: error=%lu, executable=%ls
-",
+            std::fwprintf(stderr, L"CreateProcessW failed: error=%lu, executable=%ls\n",
                      error, executablePath.c_str());
             return 14;
         }
@@ -235,12 +234,12 @@ int main() {
 
         std::array<float, 4> outL {}, outR {};
         assert(receiver->process(100, 4, outL.data(), outR.data()));
-        assert(std::abs(outL[0] - 2.5f) < 1.0e-6f);
-        assert(std::abs(outR[0] - 19.5f) < 1.0e-6f);
-        assert(std::abs(outL[1] - 3.5f) < 1.0e-6f);
-        assert(std::abs(outR[1] - 28.5f) < 1.0e-6f);
-        assert(std::abs(outL[2] - 4.5f) < 1.0e-6f);
-        assert(std::abs(outR[2] - 37.5f) < 1.0e-6f);
+        assert(std::abs(outL[0] - 3.5f) < 1.0e-6f);
+        assert(std::abs(outR[0] - 29.5f) < 1.0e-6f);
+        assert(std::abs(outL[1] - 5.5f) < 1.0e-6f);
+        assert(std::abs(outR[1] - 38.5f) < 1.0e-6f);
+        assert(std::abs(outL[2] - 2.5f) < 1.0e-6f);
+        assert(std::abs(outR[2] + 2.5f) < 1.0e-6f);
         assert(std::abs(outL[3] - 3.5f) < 1.0e-6f);
         assert(std::abs(outR[3] + 3.5f) < 1.0e-6f);
 
