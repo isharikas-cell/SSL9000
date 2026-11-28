@@ -3,45 +3,63 @@
 #include <cmath>
 
 namespace ssl9000 {
+
+// All DSP state and intermediate calculations use double precision,
+// regardless of whether the host supplies float or double audio buffers.
 class DynamicSaturation {
 public:
     void prepare(double sampleRate) noexcept {
-        const float sr = static_cast<float>(sampleRate > 1.0 ? sampleRate : 44100.0);
-        attackCoeff = std::exp(-1.0f / (0.008f * sr));
-        releaseCoeff = std::exp(-1.0f / (0.120f * sr));
-        envelope = 0.0f;
+        const double sr = sampleRate > 1.0 ? sampleRate : 44100.0;
+        attackCoeff = std::exp(-1.0 / (0.008 * sr));
+        releaseCoeff = std::exp(-1.0 / (0.120 * sr));
+        envelope = 0.0;
     }
-    void process(juce::AudioBuffer<float>& buffer, float drive, float width, float crosstalk, float thresholdDb = -24.0f) noexcept {
-        if (buffer.getNumChannels() < 2) return;
+
+    template <typename SampleType>
+    void process(juce::AudioBuffer<SampleType>& buffer,
+                 double drive, double width, double crosstalk,
+                 double thresholdDb = -24.0) noexcept {
+        if (buffer.getNumChannels() < 2)
+            return;
+
         auto* left = buffer.getWritePointer(0);
         auto* right = buffer.getWritePointer(1);
-        const float driveAmount = juce::jlimit(0.0f, 1.0f, drive / 18.0f);
-        const float maxCurve = 1.0f + driveAmount * 8.0f;
-        const float sideGain = juce::jlimit(0.0f, 2.0f, width);
-        const float cross = juce::jlimit(0.0f, 0.08f, crosstalk);
-        const float threshold = std::pow(10.0f, juce::jlimit(-60.0f, 0.0f, thresholdDb) / 20.0f);
-        // Narrow knee keeps the channel saturation audible around -20 dBFS.
-        constexpr float kneeRange = 0.12f;
+
+        const double driveAmount = juce::jlimit(0.0, 1.0, drive / 18.0);
+        const double maxCurve = 1.0 + driveAmount * 8.0;
+        const double sideGain = juce::jlimit(0.0, 2.0, width);
+        const double cross = juce::jlimit(0.0, 0.08, crosstalk);
+        const double threshold = std::pow(10.0, juce::jlimit(-60.0, 0.0, thresholdDb) / 20.0);
+        constexpr double kneeRange = 0.12;
+
         for (int i = 0; i < buffer.getNumSamples(); ++i) {
-            const float inL = left[i], inR = right[i];
-            const float detector = juce::jmax(std::abs(inL), std::abs(inR));
-            const float coeff = detector > envelope ? attackCoeff : releaseCoeff;
-            envelope = coeff * envelope + (1.0f - coeff) * detector;
-            const float activity = juce::jlimit(0.0f, 1.0f, (envelope - threshold) / kneeRange);
-            const float saturation = driveAmount * activity;
-            const float curve = 1.0f + saturation * (maxCurve - 1.0f);
-            const float mid = 0.5f * (inL + inR);
-            const float side = 0.5f * (inL - inR) * sideGain;
-            const float dryL = mid + side, dryR = mid - side;
-            const float shapedL = std::tanh(dryL * curve) / curve;
-            const float shapedR = std::tanh(dryR * curve) / curve;
-            const float outL = dryL + saturation * (shapedL - dryL);
-            const float outR = dryR + saturation * (shapedR - dryR);
-            left[i] = outL * (1.0f - cross) + outR * cross;
-            right[i] = outR * (1.0f - cross) + outL * cross;
+            const double inL = static_cast<double>(left[i]);
+            const double inR = static_cast<double>(right[i]);
+            const double detector = juce::jmax(std::abs(inL), std::abs(inR));
+            const double coeff = detector > envelope ? attackCoeff : releaseCoeff;
+            envelope = coeff * envelope + (1.0 - coeff) * detector;
+
+            const double activity = juce::jlimit(0.0, 1.0, (envelope - threshold) / kneeRange);
+            const double saturation = driveAmount * activity;
+            const double curve = 1.0 + saturation * (maxCurve - 1.0);
+            const double mid = 0.5 * (inL + inR);
+            const double side = 0.5 * (inL - inR) * sideGain;
+            const double dryL = mid + side;
+            const double dryR = mid - side;
+            const double shapedL = std::tanh(dryL * curve) / curve;
+            const double shapedR = std::tanh(dryR * curve) / curve;
+            const double outL = dryL + saturation * (shapedL - dryL);
+            const double outR = dryR + saturation * (shapedR - dryR);
+
+            left[i] = static_cast<SampleType>(outL * (1.0 - cross) + outR * cross);
+            right[i] = static_cast<SampleType>(outR * (1.0 - cross) + outL * cross);
         }
     }
+
 private:
-    float envelope = 0.0f, attackCoeff = 0.0f, releaseCoeff = 0.0f;
+    double envelope = 0.0;
+    double attackCoeff = 0.0;
+    double releaseCoeff = 0.0;
 };
+
 } // namespace ssl9000
