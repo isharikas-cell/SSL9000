@@ -1,1 +1,30 @@
-# SSL9000 Console (independent emulation project)\n\nTwo stereo VST3 processors for Studio One on Windows x64:\n- **Channel**: per-instance envelope-driven saturation, stereo width and crosstalk controls.\n- **Master**: stereo-bus envelope-driven saturation, width and crosstalk controls.\n\nThis is an independent, work-in-progress audio software project. It is not affiliated with, endorsed by, or an official product of Solid State Logic. The DSP currently uses a linked-stereo envelope follower (8 ms attack / 120 ms release). As the detected signal level rises above approximately -24 dBFS, the nonlinear transfer curve progressively increases, generating more harmonics on louder passages. Drive sets the maximum intensity; it is not a static gain boost. This is an early prototype, not a measured or exact emulation of any hardware console.\n\n## Build\nThe CMake project fetches JUCE 8.0.6 at configure time. On Windows, use Visual Studio 2022 with the C++ desktop workload:\n```powershell\ncmake -S . -B build -A x64\ncmake --build build --config Release --parallel\n```\nThe GitHub Actions workflow builds both VST3 targets and uploads them as an artifact.\n\n## Current scope\nStereo plugin instances only. The 32-channel console-link architecture, inter-instance audio transport, latency management, custom GUI, oversampling, and Studio One validation are not implemented yet. Standard DAW bus routing remains the reliable summing path until any inter-instance transport is implemented and tested.\n\n## Licensing\nJUCE is fetched from its upstream repository under its applicable licensing terms. Review JUCE's current licensing requirements before distributing binaries commercially.\n
+# SSL9000 Console (independent emulation project)
+
+Two stereo VST3 insert processors for Studio One and other compatible DAWs:
+- **SSL9000 Channel**: per-track envelope-driven saturation, stereo width and crosstalk.
+- **SSL9000 Master**: stereo-bus processing with the same controls and a lower detector threshold.
+
+Both plugins use the DAW's normal audio routing and summing. There is no inter-plugin audio transport, shared-memory session, Channel ID, Bus ID, Bus Receive or Bus Send dependency. Insert Channel on individual tracks and Master on the stereo output or any bus you want to process.
+
+## Double-precision processing
+
+Both processors advertise VST3 double-precision support to the host. The DSP state and intermediate calculations (envelope follower, detector, saturation curve, stereo matrix and crosstalk) use C++ `double`. Float processing is also implemented for hosts that choose the 32-bit sample path; the calculations inside the DSP still use double precision in that mode.
+
+## DSP
+
+The current prototype uses a linked-stereo envelope follower (8 ms attack / 120 ms release). As the detected signal level rises above the processor's threshold, the nonlinear transfer curve progressively increases, generating more harmonics on louder passages. Drive sets the maximum intensity; it is not a static gain boost. This is an independent work-in-progress and is not an exact or measured emulation of any hardware console, nor is it affiliated with or endorsed by Solid State Logic.
+
+## Build
+
+The CMake project fetches JUCE 8.0.6 at configure time. On Windows, use Visual Studio 2022 with the C++ desktop workload:
+
+```powershell
+cmake -S . -B build -A x64
+cmake --build build --config Release --parallel
+```
+
+The GitHub Actions workflow builds the Channel and Master VST3 targets and uploads them as an artifact.
+
+## Licensing
+
+JUCE is fetched from its upstream repository under its applicable licensing terms. Review JUCE's current licensing requirements before distributing binaries commercially.
