@@ -4,8 +4,7 @@
 
 namespace ssl9000 {
 
-// All DSP state and intermediate calculations use double precision,
-// regardless of whether the host supplies float or double audio buffers.
+// DSP state and intermediate calculations use double precision.
 class DynamicSaturation {
 public:
     void prepare(double sampleRate) noexcept {
@@ -17,18 +16,16 @@ public:
 
     template <typename SampleType>
     void process(juce::AudioBuffer<SampleType>& buffer,
-                 double drive, double width, double crosstalk,
+                 double drive, double width,
                  double thresholdDb = -24.0) noexcept {
         if (buffer.getNumChannels() < 2)
             return;
 
         auto* left = buffer.getWritePointer(0);
         auto* right = buffer.getWritePointer(1);
-
         const double driveAmount = juce::jlimit(0.0, 1.0, drive / 18.0);
         const double maxCurve = 1.0 + driveAmount * 8.0;
         const double sideGain = juce::jlimit(0.0, 2.0, width);
-        const double cross = juce::jlimit(0.0, 0.08, crosstalk);
         const double threshold = std::pow(10.0, juce::jlimit(-60.0, 0.0, thresholdDb) / 20.0);
         constexpr double kneeRange = 0.12;
 
@@ -48,11 +45,8 @@ public:
             const double dryR = mid - side;
             const double shapedL = std::tanh(dryL * curve) / curve;
             const double shapedR = std::tanh(dryR * curve) / curve;
-            const double outL = dryL + saturation * (shapedL - dryL);
-            const double outR = dryR + saturation * (shapedR - dryR);
-
-            left[i] = static_cast<SampleType>(outL * (1.0 - cross) + outR * cross);
-            right[i] = static_cast<SampleType>(outR * (1.0 - cross) + outL * cross);
+            left[i] = static_cast<SampleType>(dryL + saturation * (shapedL - dryL));
+            right[i] = static_cast<SampleType>(dryR + saturation * (shapedR - dryR));
         }
     }
 
